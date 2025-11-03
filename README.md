@@ -17,6 +17,7 @@ Real Time Operating System Project for ECE-4380
 
 # Features
 * Custom RTOS
+    * Custom Real-Time Operating System built upon the internal timer of the STM32, and without external packages
 * Dual Power Monitoring
     * Samping INA219s via I2C
 * Bluetooth Streaming
