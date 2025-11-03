@@ -14,3 +14,16 @@ Real Time Operating System Project for ECE-4380
     * 2x CQC SRD-5VDC-SL-C Logic-Level Relays
 * Power
     * 2x USB Wall Adapters (5V / 2A)
+
+# Features
+* Custom RTOS
+* Dual Power Monitoring
+    * Samping INA219s via I2C
+* Bluetooth Streaming
+    * Send formatted power readings to the STM32 over UART
+* Website Hosting
+    * Laptop-hosted webpage for information display and light control
+* Light Control
+    * Turning on & off lights based on phototransistor readings or webpage inputs
+* Multi-room Extension
+    * Two HC-05s link to seperate lamps. Local lamp readings or webpage inputs will turn on specified lamps
