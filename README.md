@@ -1,3 +1,16 @@
 # Embedded-RTOS
 Real Time Operating System Project for ECE-4380
 
+# Hardware
+* MCUs
+    * STM32 Nucleo (Primary Controller)
+    * STM32 Blue Pill (Remote Node)
+* Sensors
+    * 2x INA219 I2C Current/Voltage/Power Sensors
+    * 2x USB-A 3.0 Power Monitors
+* Wireless
+    * 2x HC-05 Bluetooth SPP UART Modules
+* Actuators
+    * 2x CQC SRD-5VDC-SL-C Logic-Level Relays
+* Power
+    * 2x USB Wall Adapters (5V / 2A)
