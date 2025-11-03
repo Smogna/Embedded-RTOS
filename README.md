@@ -14,6 +14,7 @@ Real Time Operating System Project for ECE-4380
     * 2x CQC SRD-5VDC-SL-C Logic-Level Relays
 * Power
     * 2x USB Wall Adapters (5V / 2A)
+* Laptop with Bluetooth Capability
 
 # Features
 * Custom RTOS
@@ -28,3 +29,10 @@ Real Time Operating System Project for ECE-4380
     * Turning on & off lights based on phototransistor readings or webpage inputs
 * Multi-room Extension
     * Two HC-05s link to seperate lamps. Local lamp readings or webpage inputs will turn on specified lamps
+
+# System Requirements
+In order to run this RTOS, you will need:
+* Hardware
+    * All listed elements in the Hardware section
+* Software
+    * stm32f1xx_hal C package
