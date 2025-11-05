@@ -3,7 +3,7 @@ Real Time Operating System Project for ECE-4380
 
 # Hardware
 * MCUs
-    * STM32 Nucleo (Primary Controller)
+    * STM32 Nucleo - STM32F446RET6 (Primary Controller)
     * STM32 Blue Pill (Remote Node)
 * Sensors
     * 2x INA219 I2C Current/Voltage/Power Sensors
