@@ -35,4 +35,5 @@ In order to run this RTOS, you will need:
 * Hardware
     * All listed elements in the Hardware section
 * Software
-    * stm32f1xx_hal C package
+   * STM32CubeIDE 
+   * stm32f1xx_hal C package
