@@ -1,21 +1,6 @@
 # Embedded-RTOS
 Real Time Operating System Project for ECE-4380
 
-# Hardware
-* MCUs
-    * STM32 Nucleo - STM32F446RET6 (Primary Controller)
-    * STM32 Blue Pill (Remote Node)
-* Sensors
-    * 2x INA219 I2C Current/Voltage/Power Sensors
-    * 2x USB-A 3.0 Power Monitors
-* Wireless
-    * 2x HC-05 Bluetooth SPP UART Modules
-* Actuators
-    * 2x CQC SRD-5VDC-SL-C Logic-Level Relays
-* Power
-    * 2x USB Wall Adapters (5V / 2A)
-* Laptop with Bluetooth Capability
-
 # Features
 * Custom RTOS
     * Custom Real-Time Operating System built upon the internal timer of the STM32, and without external packages
@@ -33,7 +18,21 @@ Real Time Operating System Project for ECE-4380
 # System Requirements
 In order to run this RTOS, you will need:
 * Hardware
-    * All listed elements in the Hardware section
+    * MCUs
+       * STM32 Nucleo - STM32F446RET6 (Primary Controller)
+       * STM32 Blue Pill (Remote Node)
+   * Sensors
+       * 2x INA219 I2C Current/Voltage/Power Sensors
+       * 2x USB-A 3.0 Power Monitors
+   * Wireless
+       * 2x HC-05 Bluetooth SPP UART Modules
+   * Actuators
+       * 2x CQC SRD-5VDC-SL-C Logic-Level Relays
+   * Power
+       * 2x USB Wall Adapters (5V / 2A)
+   * Laptop with Bluetooth Capability
 * Software
    * STM32CubeIDE 
-   * stm32f1xx_hal C package
+      * stm32f1xx_hal C package (for STM32 functionality)
+      * EGit (for version control)
+ 
