@@ -7,13 +7,11 @@ Real Time Operating System Project for ECE-4380
 * Dual Power Monitoring
     * Samping INA219s via I2C
 * Bluetooth Streaming
-    * Send formatted power readings to the STM32 over UART
+    * Send formatted power readings to the website via HC-05s and UART
 * Website Hosting
     * Laptop-hosted webpage for information display and light control
 * Light Control
-    * Turning on & off lights based on phototransistor readings or webpage inputs
-* Multi-room Extension
-    * Two HC-05s link to seperate lamps. Local lamp readings or webpage inputs will turn on specified lamps
+    * Turning on & off lights based on user inputs
 
 # System Requirements
 In order to run this RTOS, you will need:
