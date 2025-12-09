@@ -27,8 +27,9 @@ In order to run this RTOS, you will need:
        * 1x CQC SRD-5VDC-SL-C Logic-Level Relays
    * Laptop with Bluetooth Capability
 * Software
-   * STM32CubeIDE 
-      * stm32f1xx_hal C package (for STM32 functionality)
+   * Arduiono IDE
+      * Specific STM32 Board Packages
+         *  https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json
     
  # Run and Build Instructions
 In order to have a functioning project:
