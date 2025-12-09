@@ -36,9 +36,9 @@ In order to run this RTOS, you will need:
      * Download the RTOS.c and index.html webpage
   * Step 2
      * Import the files into either the STM32CubeIDE or Arduino IDE
-    * Step 3
-       * Flash the board with the code
-    * Step 4
-       * Launch the webpage and connect to the HC05
-      * EGit (for version control)
+ * Step 3
+    * Flash the board with the code
+ * Step 4
+    * Launch the webpage and connect to the HC05 through bluetooth
+
  
