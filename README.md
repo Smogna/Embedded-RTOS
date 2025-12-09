@@ -30,12 +30,12 @@ In order to run this RTOS, you will need:
    * STM32CubeIDE 
       * stm32f1xx_hal C package (for STM32 functionality)
     
-    # Run and Build Instructions
-  In order to have a functioning project:
-  * Step 1
-     * Download the RTOS.c and index.html webpage
-  * Step 2
-     * Import the files into either the STM32CubeIDE or Arduino IDE
+ # Run and Build Instructions
+In order to have a functioning project:
+* Step 1
+  * Download the RTOS.c and index.html webpage
+* Step 2
+  * Import the files into either the STM32CubeIDE or Arduino IDE
  * Step 3
     * Flash the board with the code
  * Step 4
