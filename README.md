@@ -33,12 +33,14 @@ In order to run this RTOS, you will need:
  # Run and Build Instructions
 In order to have a functioning project:
 * Step 1
-  * Download the RTOS.c and index.html webpage
+   * Download the RTOS.c and index.html webpage
 * Step 2
-  * Import the files into either the STM32CubeIDE or Arduino IDE
- * Step 3
-    * Flash the board with the code
- * Step 4
-    * Launch the webpage and connect to the HC05 through bluetooth
+   * Import the files into either the STM32CubeIDE or Arduino IDE (A guide can be found here : https://www.instructables.com/Getting-Started-With-Stm32-Using-Arduino-IDE/)
+* Step 3
+   * Flash the board with the rtos.c code
+* Step 4
+   * Launch the webpage on your bluetooth capable laptop
+* Step 5
+   * Connect to the HC05 via bluetooth and start monitoring
 
  
