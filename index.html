@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Energy Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    .status-dot {
+      width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-left: 8px;
+    }
+    .status-online { background-color: #28a745; }
+    .status-offline { background-color: #dc3545; }
+    .card { transition053: all 0.3s; }
+    .card.dark-mode { background-color: #1e1e1e; color: #e0e0e0; border-color: #333; }
+    body.dark-mode { background-color: #121212; color: #e0e0e0; }
+  </style>
+</head>
+<body class="light-mode">
+  <div class="container py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1>Energy Dashboard</h1>
+      <div>
+        <span>Status:</span>
+        <span id="statusDot" class="status-dot status-offline"></span>
+        <button class="btn btn-sm btn-outline-secondary   ms-3" onclick="toggleDarkMode()">Dark Mode</button>
+        <button class="btn btn-sm btn-primary ms-2" onclick="connectHC05()">Connect HC-05</button>
+      </div>
+    </div>
+
+    <!-- Alert -->
+    <div id="alert" class="alert alert-danger d-none mb-4">
+      High Energy Usage Detected (Over 2 W)!
+    </div>
+
+    <!-- Power Cards -->
+    <div class="row text-center mb-4">
+      <div class="col-md-4 mb-3">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h5>Total Power</h5>
+            <h3 id="totalPower">0.00 W</h3>
+            <button id="killButton" class="btn btn-danger mt-3 px-4" onclick="killPower()">Emergency Kill</button>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 mb-3">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h5>Main Room</h5>
+            <h3 id="mainRoom">0.00 W</h3>
+            <button id="mainToggle" class="btn btn-success btn-lg mt-3" onclick="toggleMainLight()">
+              Light: ON
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 mb-3">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h5>Sub Room</h5>
+            <h3 id="subRoom">0.00 W</h3>
+            <button class="btn btn-secondary mt-3" disabled>Coming Soon</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart Filter -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4>Power Over Time</h4>
+      <select id="deviceFilter" class="form-select w-auto">
+        <option value="total">Total Power</option>
+        <option value="mainRoom">Main Room</option>
+      </select>
+    </div>
+
+    <!-- Chart -->
+    <canvas id="powerChart" height="100"></canvas>
+  </div>
+
+  <script>
+    let port = null;
+    let lightIsOn = true;  // Tracks real relay state
+
+    const datasets = {
+      total:    { label: "Total Power (W)", data: [], borderColor: "#007bff" },
+      mainRoom: { label: "Main Room (W)",   data: [], borderColor: "#28a745" }
+    };
+
+    const chart = new Chart(document.getElementById("powerChart"), {
+      type: "line",
+      data: { labels: [], datasets: [datasets.total] },
+      options: {
+        responsive: true,
+        animation: false,
+        scales: {
+          x: { ticks: { color: "#000" } },
+          y: { beginAtZero: true, ticks: { color: "#000" } }
+        },
+        plugins: { legend: { labels: { color: "#000" } } }
+      }
+    });
+
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark-mode");
+      document.querySelectorAll(".card").forEach(c => c.classList.toggle("dark-mode"));
+      const color = document.body.classList.contains("dark-mode") ? "#e0e0e0" : "#000";
+      chart.options.scales.x.ticks.color = color;
+      chart.options.scales.y.ticks.color = color;
+      chart.options.plugins.legend.labels.color = color;
+      chart.update();
+    }
+
+    async function connectHC05() {
+  if (!("serial" in navigator)) {
+    alert("Web Serial API not supported. Use Chrome/Edge 117+");
+    return;
+  }
+
+  try {
+    // Open serial port
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+
+    // Update status indicator
+    const statusDot = document.getElementById("statusDot");
+    statusDot.classList.remove("status-offline");
+    statusDot.classList.add("status-online");
+    console.log("Connected to HC-05");
+
+    // Set up text decoder and reader
+    const decoder = new TextDecoderStream();
+    port.readable.pipeTo(decoder.writable);
+    const reader = decoder.readable.getReader();
+    console.log("Decoder and reader initialized");
+
+    let buffer = "";  // holds partial lines between reads
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        console.log("Reader done");
+        break;
+      }
+      if (!value) continue;
+
+      buffer += value;                 // append new chunk
+      const lines = buffer.split("\n");
+      buffer = lines.pop();            // keep last (possibly partial) line
+      console.log("Buffer" + buffer)
+      lines.forEach(rawLine => {
+        let line = rawLine.trim();
+        console.log("line"+line)
+        if (!line) return;             // ignore empty lines
+
+        const power = parseFloat(line);
+        if (isNaN(power)) {
+          console.log("Non-numeric line:", line);
+          return;
+        }
+
+        // Update text readouts
+        document.getElementById("mainRoom").textContent  = power.toFixed(2) + " W";
+        document.getElementById("totalPower").textContent = power.toFixed(2) + " W";
+
+        // Alert for high power
+        if (power > 2) {
+          document.getElementById("alert").classList.remove("d-none");
+        } else {
+          document.getElementById("alert").classList.add("d-none");
+        }
+
+        // Push to datasets and update chart
+        const now = new Date().toLocaleTimeString();
+        datasets.mainRoom.data.push(power);
+        datasets.total.data.push(power);
+        chart.data.labels.push(now);
+
+        // Keep only the last 10 points
+        if (chart.data.labels.length > 10) {
+          chart.data.labels.shift();
+          datasets.mainRoom.data.shift();
+          datasets.total.data.shift();
+        }
+
+        chart.update();
+      });
+    }
+  } catch (e) {
+    alert("Failed to connect! Make sure HC-05 is paired in Windows Bluetooth settings.");
+    console.error(e);
+
+    const statusDot = document.getElementById("statusDot");
+    statusDot.classList.remove("status-online");
+    statusDot.classList.add("status-offline");
+  }
+}
+
+    async function send(cmd) {
+      if (!port?.writable) {
+        alert("Not connected!");
+        return false;
+      }
+      try {
+        const writer = port.writable.getWriter();
+        await writer.write(new Uint8Array(cmd));
+        writer.releaseLock();
+        return true;
+      } catch (e) {
+        console.error("Send failed:", e);
+        return false;
+      }
+    }
+
+    // Normal light toggle (Main Room)
+    async function toggleMainLight() {
+      lightIsOn = !lightIsOn;
+      await send([1, lightIsOn ? 1 : 0]);
+
+      const btn = document.getElementById("mainToggle");
+      if (lightIsOn) {
+        btn.classList.remove("btn-danger");
+        btn.classList.add("btn-success");
+        btn.textContent = "Light: ON";
+      } else {
+        btn.classList.remove("btn-success");
+        btn.classList.add("btn-danger");
+        btn.textContent = "Light: OFF";
+      }
+    }
+
+    // Emergency Kill — forces OFF
+    async function killPower() {
+      await send([0xFF, 0x00]);
+      lightIsOn = false;
+
+      const btn = document.getElementById("mainToggle");
+      btn.classList.remove("btn-success");
+      btn.classList.add("btn-danger");
+      btn.textContent = "Light: OFF (KILLED)";
+
+      document.getElementById("alert").classList.remove("d-none");
+      document.getElementById("alert").innerHTML = "EMERGENCY KILL ACTIVATED! Power Cut!";
+    }
+
+    document.getElementById("deviceFilter").addEventListener("change", (e) => {
+      chart.data.datasets = [datasets[e.target.value]];
+      chart.update();
+    });
+  </script>
+</body>
+</html>
