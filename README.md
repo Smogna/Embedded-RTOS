@@ -20,14 +20,11 @@ In order to run this RTOS, you will need:
        * STM32 Nucleo - STM32F446RET6 (Primary Controller)
        * STM32 Blue Pill (Remote Node)
    * Sensors
-       * 2x INA219 I2C Current/Voltage/Power Sensors
-       * 2x USB-A 3.0 Power Monitors
+       * 1x INA219 I2C Current/Voltage/Power Sensors
    * Wireless
-       * 2x HC-05 Bluetooth SPP UART Modules
+       * 1x HC-05 Bluetooth SPP UART Modules
    * Actuators
-       * 2x CQC SRD-5VDC-SL-C Logic-Level Relays
-   * Power
-       * 2x USB Wall Adapters (5V / 2A)
+       * 1x CQC SRD-5VDC-SL-C Logic-Level Relays
    * Laptop with Bluetooth Capability
 * Software
    * STM32CubeIDE 
