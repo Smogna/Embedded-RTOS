@@ -1,188 +1,246 @@
-#include "main.h"
-#include "stm32f1xx_hal.h"
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_INA219.h>
 
-// ---------- Define Task Structure ----------
-typedef struct {
-    int state;
-    unsigned long period;
-    unsigned long elapsedTime;
-    int (*Function)(int);
+#define RELAY_PIN PA1
+
+// HC-05 on USART1
+HardwareSerial BTSerial(PA10, PA9);   // RX, TX
+
+Adafruit_INA219 ina219;
+
+//Global var defs
+char  lightIsOn = 1;
+char  emergencyKill = 0;
+float P_total = 0.0f;
+float P_sum = 0.0f;
+unsigned long P_count = 0;
+
+// Function defs
+static void  BT_Send(const char *s);
+static void  setPTotal(float set);
+static float getPTotal(void);
+static void  handleBluetooth(void);
+
+// task structure def
+typedef struct task {
+  int state;
+  unsigned long period;      
+  unsigned long elapsedTime; 
+  int (*Function)(int);
 } task;
 
-// ---------- Function Declarations ----------
-void SystemClock_Config(void);
-void InitGPIO(void);
-void TimerSet(unsigned long ms);
-void TimerOn(void);
-void TimerISR(void);
+//Task SM definitions
+const unsigned int numTasks = 3;
+task tasks[numTasks];
+enum Sample_states{SAMPLE_INIT, SAMPLE_UPDATE};
+int Sample(int);
+enum BT_State{BT_INIT, BT_SEND};
+int BT(int);
+enum Relay_States{RELAY_INIT, RELAY_CONTROL};
+int Relay(int);
 
-// ---------- Scheduler Constants ----------
-const unsigned int numTasks = 2;
-const unsigned long period = 100;           // Base tick (ms)
-const unsigned long periodBlinkLED = 1500;
-const unsigned long periodThreeLED = 500;
+//Period definitions
+const unsigned long period = 1; 
+const unsigned long periodSample = 1;
+const unsigned long periodSend = 1000;
+const unsigned long periodRelay = 100;
 
-task tasks[2];
-
-// ---------- Task States ----------
-enum BL_states { BL0, BL1 };
-int BlinkLED(int state);
-
-enum TL_states { TL0, TL1, TL2 };
-int ThreeLED(int state);
-
-// ---------- Virtual Port Output ----------
-uint8_t outputs_B = 0;
-
-// ---------- HAL Handles ----------
-TIM_HandleTypeDef htim2;
-
-// ---------- Init GPIO ----------
-void InitGPIO(void) {
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOC_CLK_ENABLE();
-
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    // PA0, PA5, PA6, PA7 -> Output LEDs
-    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-    // PC13 -> Onboard LED (active LOW)
-    GPIO_InitStruct.Pin = GPIO_PIN_13;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-    // Set initial states
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET); // LED OFF
-}
-
-// ---------- Output Update Function ----------
-void UpdateOutputs(uint8_t B) {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, (B & (1 << 0)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, (B & (1 << 5)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, (B & (1 << 6)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, (B & (1 << 7)) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-}
-
-// ---------- Timer ISR ----------
-void TimerISR(void) {
-    for (unsigned char i = 0; i < numTasks; i++) {
-        if (tasks[i].elapsedTime >= tasks[i].period) {
-            tasks[i].state = tasks[i].Function(tasks[i].state);
-            tasks[i].elapsedTime = 0;
-        }
-        tasks[i].elapsedTime += period;
+void TimerISR() {
+  //Run through each task
+  for (unsigned char i = 0; i < numTasks; i++) {
+    if (tasks[i].elapsedTime >= tasks[i].period) {
+      tasks[i].state = tasks[i].Function(tasks[i].state);
+      tasks[i].elapsedTime = 0;
     }
+    tasks[i].elapsedTime += period;
+  }
 }
 
-// ---------- HAL SysTick Callback ----------
-void HAL_SYSTICK_Callback(void) {
-    TimerISR(); // Called every SysTick interrupt (every 1 ms)
+//INA219 sampling state machine
+float busVoltage_V;
+float current_mA;
+float power_W;
+int Sample(int state){
+  switch(state){
+    case(SAMPLE_INIT):
+      //Set all to 0
+      busVoltage_V = 0;
+      current_mA = 0;
+      power_W = 0;
+      state = SAMPLE_UPDATE;
+      break;
+    case(SAMPLE_UPDATE):
+      //Get voltage & current, store P = V*I
+      busVoltage_V = ina219.getBusVoltage_V();
+      current_mA = ina219.getCurrent_mA();
+      power_W = (float)busVoltage_V * (float)(current_mA/1000.0);
+      P_sum += power_W;
+      P_count += 1;
+      //setPTotal(power_W);
+      break;
+  }
+  return state;
 }
 
-// ---------- HAL Setup ----------
-void TimerSet(unsigned long ms) {
-    // SysTick already runs at 1 ms tick (from HAL_Init)
-    // So we don’t need to configure it manually.
-    // Just use the callback every ms.
+//Bluetooth state machine (sending, recieving is in relay
+int BT(int state){
+  switch(state){
+    case(BT_INIT):
+      //Nothing needed here, just wait for sampling to update
+      state = BT_SEND;
+      break;
+    case(BT_SEND):
+      // calculate power avg
+      if (P_count > 0){
+        float P_avg = (float)P_sum / (float)P_count;
+        setPTotal(P_avg);
+      } else {
+        setPTotal(0);
+      }
+      //Reset counter and sum
+      P_count = 0;
+      P_sum = 0;
+      //Send over BT
+      BT_SendPower(getPTotal());
+
+      break;
+  }
+  return state;
 }
 
-void TimerOn(void) {
-    // HAL handles SysTick automatically
-    // We can just rely on HAL_SYSTICK_Callback()
+//Relay control state machine
+int Relay(int state){
+  switch(state){
+    case(RELAY_INIT):
+      //Set relay high
+      digitalWrite(RELAY_PIN, HIGH);
+      state = RELAY_CONTROL;
+      break;
+    case(RELAY_CONTROL):
+      handleBluetooth(); // Listen to if we need to turn off relay for shutdown or turn off feom webapp
+      break;
+  }
+  return state;
 }
 
-// ---------- Task Implementations ----------
-int BlinkLED(int state) {
-    switch (state) {
-        case BL0:
-            outputs_B &= ~0x01; // Clear bit 0
-            UpdateOutputs(outputs_B);
-            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET); // LED ON
-            state = BL1;
-            break;
+//If emergency shutdown, force relay low
+static void checkShutdown(){
+  if (emergencyKill) {
+    digitalWrite(RELAY_PIN, LOW);
+    lightIsOn = 0;
+  }
+}
 
-        case BL1:
-            outputs_B |= 0x01;  // Set bit 0
-            UpdateOutputs(outputs_B);
-            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);   // LED OFF
-            state = BL0;
-            break;
+// C String over BT, just debugging
+static void BT_Send(const char *s) {
+  BTSerial.print(s);
+}
+
+// Sends power over via BT
+static void BT_SendPower(float power){
+  //float p = getPTotal();
+  BTSerial.print(power,3);
+  BTSerial.print("\r\n");
+}
+
+// Power total setter/getter
+static void setPTotal(float set) {
+  P_total = set;
+}
+
+static float getPTotal(void) {
+  return P_total;
+}
+
+// Handle incoming BT commands
+static void handleBluetooth(void) {
+  if (!BTSerial.available()) {
+    return;
+  }
+
+  char header = (char)BTSerial.read();
+
+  checkShutdown();
+
+  if (header == 0xFF) {
+    // Block until we get the second byte (like HAL_MAX_DELAY in the cubeIDE but in .ino)
+    while (!BTSerial.available()) {
+      yield();
     }
-    return state;
-}
+    char value = (char)BTSerial.read();
 
-int ThreeLED(int state) {
-    switch (state) {
-        case TL0:
-            outputs_B = (outputs_B & 0x01) | 0x80;
-            UpdateOutputs(outputs_B);
-            state = TL1;
-            break;
-        case TL1:
-            outputs_B = (outputs_B & 0x01) | 0x40;
-            UpdateOutputs(outputs_B);
-            state = TL2;
-            break;
-        case TL2:
-            outputs_B = (outputs_B & 0x01) | 0x20;
-            UpdateOutputs(outputs_B);
-            state = TL0;
-            break;
+    if (value == 0x00) {
+      emergencyKill = 1;
+      lightIsOn     = 0;
+
+      digitalWrite(RELAY_PIN, LOW);
+      BT_Send("Kill activated\r\n");
     }
-    return state;
-}
+  }
 
-// ---------- Main ----------
-int main(void) {
-    HAL_Init();
-    SystemClock_Config();
-    InitGPIO();
-
-    // Setup tasks
-    tasks[0].state = BL0;
-    tasks[0].period = periodBlinkLED;
-    tasks[0].elapsedTime = tasks[0].period;
-    tasks[0].Function = &BlinkLED;
-
-    tasks[1].state = TL0;
-    tasks[1].period = periodThreeLED;
-    tasks[1].elapsedTime = tasks[1].period;
-    tasks[1].Function = &ThreeLED;
-
-    TimerSet(period);
-    TimerOn();
-
-    while (1) {
-        // Idle loop (tasks handled in SysTick interrupt)
+  // Normal toggle, header is 0x01
+  else if (!emergencyKill && header == 1) {
+    while (!BTSerial.available()) {
+      yield();
     }
+    char value = (char)BTSerial.read();
+
+    lightIsOn = (value == 1);
+    digitalWrite(RELAY_PIN, lightIsOn ? HIGH : LOW);
+  }
+
+  checkShutdown();
+
 }
 
-// ---------- Basic System Clock Config ----------
-void SystemClock_Config(void) {
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+void setup() {
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, HIGH);   // NO transparent
 
-    /** Initializes the CPU, AHB and APB busses clocks */
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-    RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-    RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-    RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
-    HAL_RCC_OscConfig(&RCC_OscInitStruct);
+  pinMode(PB8, INPUT_PULLUP); // SCL Pullup
+  pinMode(PB9, INPUT_PULLUP); // SDA Pullup
 
-    /** Initializes the CPU, AHB and APB busses clocks */
-    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  Wire.begin();   // uses default I2C pins for your board
+  if(!ina219.begin()){
+    //this will fail on an I2C issue (doesn't get an ack from the ina)
+    BT_Send("INA219 is cooked"); //This check helped me realized 2 of our INAs were busted
+  } else {
+    BT_Send("INA219 is good");
+  }
 
-    HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2);
+  // Bluetooth UART
+  BTSerial.begin(9600);   // matches huart1.Init.BaudRate = 9600
+
+  lightIsOn = 1;
+  emergencyKill = 0;
+
+  //Task initialization
+  tasks[0].state = SAMPLE_INIT;
+  tasks[0].period = periodSample;
+  tasks[0].elapsedTime = 0;
+  tasks[0].Function = &Sample;
+
+  tasks[1].state = BT_INIT;
+  tasks[1].period = periodSend;
+  tasks[1].elapsedTime = 0;
+  tasks[1].Function = &BT;
+
+  tasks[2].state = RELAY_INIT;
+  tasks[2].period = periodRelay;
+  tasks[2].elapsedTime = 0;
+  tasks[2].Function = &Relay;
 }
+
+void loop() {
+  static unsigned long lastTick = 0;
+  unsigned long now = millis();
+
+  //Call TimerISR every ms  
+  if ((now - lastTick) >= period) {
+    TimerISR();
+    lastTick += period;
+  }
+
+}
+
